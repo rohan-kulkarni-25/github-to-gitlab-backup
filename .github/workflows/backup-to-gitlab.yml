@@ -1,0 +1,37 @@
+name: Backup Selected Repos to GitLab
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Daily at 3 AM UTC
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo (to get repos.json)
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git jq
+
+      - name: Mirror repos from repos.json
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITHUB_ORG: your-org-name
+          GITLAB_GROUP: your-gitlab-group
+        run: |
+          repos=$(jq -r '.repos[]' repos.json)
+
+          for repo in $repos; do
+            echo "Backing up $repo"
+            git clone --mirror https://x-access-token:$GH_TOKEN@github.com/$GITHUB_ORG/$repo.git
+            cd $repo.git
+
+            git push --mirror https://oauth2:$GITLAB_TOKEN@gitlab.com/$GITLAB_GROUP/$repo.git || echo "Push failed for $repo"
+            cd ..
+          done
